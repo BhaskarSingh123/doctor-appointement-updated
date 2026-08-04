@@ -16,6 +16,9 @@ import DoctorDashboard from './pages/Doctor/DoctorDashboard';
 import DoctorProfile from './pages/Doctor/DoctorProfile';
 import AdminPdfUpload from './pages/Admin/AdminPdfUpload';
 
+
+
+
 const App = () => {
 
   const { dToken } = useContext(DoctorContext)
@@ -47,5 +50,6 @@ const App = () => {
     </>
   )
 }
+
 
 export default App

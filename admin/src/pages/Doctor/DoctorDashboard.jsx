@@ -1,15 +1,17 @@
-import React from 'react'
+import React , { useRef }from 'react'
 import { useContext } from 'react'
 import { useEffect } from 'react'
 import { DoctorContext } from '../../context/DoctorContext'
 import { assets } from '../../assets/assets'
 import { AppContext } from '../../context/AppContext'
+import socket from "../../socket"
+import DoctorProfile from './DoctorProfile'
 
 const DoctorDashboard = () => {
 
-  const { dToken, dashData, getDashData, cancelAppointment, completeAppointment } = useContext(DoctorContext)
+  const { dToken, dashData, getDashData, cancelAppointment, completeAppointment,profileData,getProfileData } = useContext(DoctorContext)
   const { slotDateFormat, currency } = useContext(AppContext)
-
+  const joinedRef = useRef(false)
 
   useEffect(() => {
 
@@ -18,6 +20,59 @@ const DoctorDashboard = () => {
     }
 
   }, [dToken])
+
+  useEffect(() => {
+
+   if (dToken) {
+
+      getProfileData()
+
+   }
+
+  }, [dToken])
+
+  useEffect(() => {
+
+   if (
+      profileData?._id &&
+      !joinedRef.current
+   ) {
+
+      socket.emit(
+         "join-room",
+         `doctor_${profileData._id}`
+      )
+
+      console.log(
+         `Joined room: doctor_${profileData._id}`
+      )
+
+      joinedRef.current = true
+
+   }
+
+  }, [profileData])
+
+  useEffect(() => {
+
+   socket.on("new-appointment", (data) => {
+      console.log(data)
+      getDashData()
+   })
+
+   socket.on("appointment-cancelled", (data) => {
+      console.log(data)
+      getDashData()
+   })
+
+   return () => {
+      socket.off("new-appointment")
+      socket.off("appointment-cancelled")
+   }
+
+  }, [])
+
+ 
 
   return dashData && (
     <div className='m-5'>

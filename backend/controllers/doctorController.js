@@ -2,6 +2,8 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 import doctorModel from "../models/doctorModel.js";
 import appointmentModel from "../models/appointmentModel.js";
+import { getIO } from "../socket.js"
+import { sendCancellationNotification } from "../services/notificationService.js"
 
 // API for doctor Login 
 const loginDoctor = async (req, res) => {
@@ -54,8 +56,27 @@ const appointmentCancel = async (req, res) => {
 
         const appointmentData = await appointmentModel.findById(appointmentId)
         if (appointmentData && appointmentData.docId === docId) {
-            await appointmentModel.findByIdAndUpdate(appointmentId, { cancelled: true })
-            return res.json({ success: true, message: 'Appointment Cancelled' })
+
+            await appointmentModel.findByIdAndUpdate(
+                appointmentId,
+                { cancelled: true }
+            )
+
+            // release doctor slot
+            const { slotDate, slotTime } = appointmentData
+            const doctorData = await doctorModel.findById(docId)
+            let slots_booked = doctorData.slots_booked
+            slots_booked[slotDate] = slots_booked[slotDate].filter(e => e !== slotTime)
+            await doctorModel.findByIdAndUpdate(docId, { slots_booked })
+
+            // Send Cancellation Notification (DB + Sockets + Email)
+            const updatedAppointment = await appointmentModel.findById(appointmentId)
+            await sendCancellationNotification(updatedAppointment, 'doctor')
+
+            return res.json({
+                success: true,
+                message: 'Appointment Cancelled'
+            })
         }
 
         res.json({ success: false, message: 'Appointment Cancelled' })
@@ -109,7 +130,21 @@ const changeAvailablity = async (req, res) => {
         const { docId } = req.body
 
         const docData = await doctorModel.findById(docId)
-        await doctorModel.findByIdAndUpdate(docId, { available: !docData.available })
+        const newAvailability = !docData.available
+        await doctorModel.findByIdAndUpdate(docId, { available: newAvailability })
+
+        // Broadcast availability update to all patients
+        try {
+            const io = getIO()
+            io.emit("doctor-availability-changed", {
+                docId,
+                available: newAvailability,
+                message: `Dr. ${docData.name} is now ${newAvailability ? 'available' : 'unavailable'}`
+            })
+        } catch (socketError) {
+            console.error("Socket emit failed in changeAvailablity:", socketError.message)
+        }
+
         res.json({ success: true, message: 'Availablity Changed' })
 
     } catch (error) {

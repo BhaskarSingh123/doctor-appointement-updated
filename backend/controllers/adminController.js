@@ -5,6 +5,7 @@ import bcrypt from "bcrypt";
 import validator from "validator";
 import { v2 as cloudinary } from "cloudinary";
 import userModel from "../models/userModel.js";
+import { sendCancellationNotification } from "../services/notificationService.js"
 
 // API for admin login
 const loginAdmin = async (req, res) => {
@@ -46,7 +47,26 @@ const appointmentCancel = async (req, res) => {
     try {
 
         const { appointmentId } = req.body
+        const appointmentData = await appointmentModel.findById(appointmentId)
+
+        if (!appointmentData) {
+            return res.json({ success: false, message: "Appointment not found" })
+        }
+
         await appointmentModel.findByIdAndUpdate(appointmentId, { cancelled: true })
+
+        // release doctor slot
+        const { docId, slotDate, slotTime } = appointmentData
+        const doctorData = await doctorModel.findById(docId)
+        if (doctorData) {
+            let slots_booked = doctorData.slots_booked
+            slots_booked[slotDate] = slots_booked[slotDate].filter(e => e !== slotTime)
+            await doctorModel.findByIdAndUpdate(docId, { slots_booked })
+        }
+
+        // Send Cancellation Notification (DB + Sockets + Email)
+        const updatedAppointment = await appointmentModel.findById(appointmentId)
+        await sendCancellationNotification(updatedAppointment, 'admin')
 
         res.json({ success: true, message: 'Appointment Cancelled' })
 

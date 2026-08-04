@@ -4,9 +4,14 @@ import validator from "validator";
 import userModel from "../models/userModel.js";
 import doctorModel from "../models/doctorModel.js";
 import appointmentModel from "../models/appointmentModel.js";
+import Notification from "../models/notificationModel.js"
+import { getIO } from "../socket.js"
+import { sendBookingNotification, sendCancellationNotification } from "../services/notificationService.js"
 import { v2 as cloudinary } from 'cloudinary'
 import stripe from "stripe";
 import razorpay from 'razorpay';
+
+
 
 // Gateway Initialize
 const stripeInstance = new stripe(process.env.STRIPE_SECRET_KEY)
@@ -175,6 +180,9 @@ const bookAppointment = async (req, res) => {
         const newAppointment = new appointmentModel(appointmentData)
         await newAppointment.save()
 
+        // Send Booking Notification (DB + Sockets + Email)
+        await sendBookingNotification(newAppointment)
+
         // save new slots data in docData
         await doctorModel.findByIdAndUpdate(docId, { slots_booked })
 
@@ -211,6 +219,10 @@ const cancelAppointment = async (req, res) => {
         slots_booked[slotDate] = slots_booked[slotDate].filter(e => e !== slotTime)
 
         await doctorModel.findByIdAndUpdate(docId, { slots_booked })
+
+        // Send Cancellation Notification (DB + Sockets + Email)
+        const updatedAppointment = await appointmentModel.findById(appointmentId)
+        await sendCancellationNotification(updatedAppointment, 'user')
 
         res.json({ success: true, message: 'Appointment Cancelled' })
 

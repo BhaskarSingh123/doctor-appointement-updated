@@ -2,6 +2,7 @@ import React, { useContext, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AppContext } from '../context/AppContext'
 import axios from 'axios'
+import socket from "../socket"
 import { toast } from 'react-toastify'
 import { assets } from '../assets/assets'
 
@@ -123,6 +124,27 @@ const MyAppointments = () => {
             getUserAppointments()
         }
     }, [token])
+
+    useEffect(() => {
+
+    socket.on(
+        "appointment-cancelled",
+        (data) => {
+
+            console.log(data)
+
+            getUserAppointments()
+
+        }
+    )
+
+    return () => {
+
+        socket.off("appointment-cancelled")
+
+    }
+
+}, [])
 
     return (
         <div>

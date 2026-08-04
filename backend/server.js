@@ -1,6 +1,9 @@
 import express from "express"
 import cors from 'cors'
 import 'dotenv/config'
+import http from "http"
+import { Server } from "socket.io"
+import { initSocket } from "./socket.js"
 
 import connectDB from "./config/mongodb.js"
 import connectCloudinary from "./config/cloudinary.js"
@@ -9,11 +12,22 @@ import userRouter from "./routes/userRoute.js"
 import doctorRouter from "./routes/doctorRoute.js"
 import adminRouter from "./routes/adminRoute.js"
 import aiRouter from "./routes/aiRoute.js"
+import notificationRouter from "./routes/notificationRoute.js"
 
 import ragRouter from "./routes/ragRoute.js"
 
 // app config
 const app = express()
+const server = http.createServer(app)
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+})
+
+initSocket(io)
+
 const port = process.env.PORT || 4000
 
 connectDB()
@@ -23,16 +37,34 @@ connectCloudinary()
 app.use(express.json())
 app.use(cors())
 
+io.on("connection", (socket) => {
+
+  console.log("User Connected:", socket.id)
+
+  socket.on("join-room", (roomId) => {
+
+      socket.join(roomId)
+
+      console.log(`Socket joined room: ${roomId}`)
+
+   })
+
+  socket.on("disconnect", () => {
+    console.log("User Disconnected")
+  })
+
+})
 // api endpoints
 app.use("/api/user", userRouter)
 app.use("/api/admin", adminRouter)
 app.use("/api/doctor", doctorRouter)
 app.use("/api/ai", aiRouter)
 app.use("/api/rag", ragRouter)
+app.use("/api/notification", notificationRouter)
 app.get("/", (req, res) => {
   res.send("API Working")
 })
 
-app.listen(port, () =>
+server.listen(port, () =>
   console.log(`Server started on PORT:${port}`)
 )

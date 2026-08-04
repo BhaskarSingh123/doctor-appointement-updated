@@ -2,12 +2,42 @@ import React, { useContext, useEffect } from 'react'
 import { assets } from '../../assets/assets'
 import { AdminContext } from '../../context/AdminContext'
 import { AppContext } from '../../context/AppContext'
+import socket from "../../socket"
+import { toast } from 'react-toastify'
+
 
 const Dashboard = () => {
 
   const { aToken, getDashData, cancelAppointment, dashData } = useContext(AdminContext)
   const { slotDateFormat } = useContext(AppContext)
+   
+  useEffect(() => {
 
+    socket.emit("join-room", "admin")
+
+    // New Appointment Notification
+    socket.on("new-appointment", (data) => {
+
+        getDashData()
+
+    })
+
+    // Appointment Cancelled Notification
+    socket.on("appointment-cancelled", (data) => {
+
+        getDashData()
+
+    })
+
+    return () => {
+
+        socket.off("new-appointment")
+
+        socket.off("appointment-cancelled")
+
+    }
+
+}, [])
   useEffect(() => {
     if (aToken) {
       getDashData()
