@@ -7,6 +7,7 @@ import appointmentModel from "../models/appointmentModel.js";
 import Notification from "../models/notificationModel.js"
 import { getIO } from "../socket.js"
 import { sendBookingNotification, sendCancellationNotification } from "../services/notificationService.js"
+import { sendEmail } from "../services/emailService.js"
 import { v2 as cloudinary } from 'cloudinary'
 import stripe from "stripe";
 import razorpay from 'razorpay';
@@ -19,6 +20,11 @@ const razorpayInstance = new razorpay({
     key_id: process.env.RAZORPAY_KEY_ID,
     key_secret: process.env.RAZORPAY_KEY_SECRET,
 })
+
+// Helper to generate a 6-digit OTP
+const generateOtp = () => {
+    return Math.floor(100000 + Math.random() * 900000).toString()
+}
 
 // API to register user
 const registerUser = async (req, res) => {
@@ -41,21 +47,172 @@ const registerUser = async (req, res) => {
             return res.json({ success: false, message: "Please enter a strong password" })
         }
 
+        // check if email already exists
+        const existingUser = await userModel.findOne({ email })
+        if (existingUser && existingUser.isVerified) {
+            return res.json({ success: false, message: "Email already registered" })
+        }
+
+        // If an unverified user exists with the same email, delete it so they can re-register
+        if (existingUser && !existingUser.isVerified) {
+            await userModel.findByIdAndDelete(existingUser._id)
+        }
+
         // hashing user password
         const salt = await bcrypt.genSalt(10); // the more no. round the more time it will take
         const hashedPassword = await bcrypt.hash(password, salt)
+
+        // Generate OTP and set 10-minute expiry
+        const otp = generateOtp()
+        const otpExpiry = new Date(Date.now() + 10 * 60 * 1000) // 10 minutes
 
         const userData = {
             name,
             email,
             password: hashedPassword,
+            isVerified: false,
+            otp,
+            otpExpiry,
+            otpAttempts: 0,
         }
 
         const newUser = new userModel(userData)
-        const user = await newUser.save()
-        const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET)
+        await newUser.save()
 
+        // Send OTP email
+        await sendEmail({
+            to: email,
+            subject: 'Prescripto — Verify Your Email',
+            text: `Your verification code is: ${otp}. It will expire in 10 minutes.`,
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px; background: #f9fafb; border-radius: 12px;">
+                    <h2 style="color: #1a1a2e; margin-bottom: 8px;">Welcome to Prescripto!</h2>
+                    <p style="color: #555; font-size: 15px;">Please use the following code to verify your email address:</p>
+                    <div style="background: #5f6fff; color: #fff; font-size: 32px; font-weight: bold; letter-spacing: 8px; text-align: center; padding: 16px; border-radius: 8px; margin: 24px 0;">
+                        ${otp}
+                    </div>
+                    <p style="color: #888; font-size: 13px;">This code expires in <strong>10 minutes</strong>. If you didn't request this, please ignore this email.</p>
+                </div>
+            `
+        })
+
+        res.json({ success: true, requiresVerification: true, email })
+
+    } catch (error) {
+        console.log(error)
+        res.json({ success: false, message: error.message })
+    }
+}
+
+// API to verify OTP
+const verifyOtp = async (req, res) => {
+    try {
+        const { email, otp } = req.body;
+
+        if (!email || !otp) {
+            return res.json({ success: false, message: 'Email and OTP are required' })
+        }
+
+        const user = await userModel.findOne({ email })
+
+        if (!user) {
+            return res.json({ success: false, message: 'User not found' })
+        }
+
+        if (user.isVerified) {
+            return res.json({ success: false, message: 'Email is already verified' })
+        }
+
+        // Check if OTP has expired
+        if (new Date() > user.otpExpiry) {
+            return res.json({ success: false, message: 'OTP has expired. Please request a new one.' })
+        }
+
+        // Check attempt limit
+        if (user.otpAttempts >= 5) {
+            return res.json({ success: false, message: 'Too many failed attempts. Please request a new OTP.' })
+        }
+
+        // Check OTP match
+        if (user.otp !== otp) {
+            await userModel.findByIdAndUpdate(user._id, { $inc: { otpAttempts: 1 } })
+            const remaining = 4 - user.otpAttempts
+            return res.json({ success: false, message: `Invalid OTP. ${remaining > 0 ? remaining : 0} attempts remaining.` })
+        }
+
+        // OTP is correct — verify the user
+        await userModel.findByIdAndUpdate(user._id, {
+            isVerified: true,
+            otp: '',
+            otpExpiry: null,
+            otpAttempts: 0,
+        })
+
+        const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET)
         res.json({ success: true, token })
+
+    } catch (error) {
+        console.log(error)
+        res.json({ success: false, message: error.message })
+    }
+}
+
+// API to resend OTP
+const resendOtp = async (req, res) => {
+    try {
+        const { email } = req.body;
+
+        if (!email) {
+            return res.json({ success: false, message: 'Email is required' })
+        }
+
+        const user = await userModel.findOne({ email })
+
+        if (!user) {
+            return res.json({ success: false, message: 'User not found' })
+        }
+
+        if (user.isVerified) {
+            return res.json({ success: false, message: 'Email is already verified' })
+        }
+
+        // Rate limit: check if last OTP was sent less than 60 seconds ago
+        if (user.otpExpiry) {
+            const timeSinceLastOtp = Date.now() - (user.otpExpiry.getTime() - 10 * 60 * 1000)
+            if (timeSinceLastOtp < 60 * 1000) {
+                const waitSeconds = Math.ceil((60 * 1000 - timeSinceLastOtp) / 1000)
+                return res.json({ success: false, message: `Please wait ${waitSeconds} seconds before requesting a new OTP.` })
+            }
+        }
+
+        // Generate new OTP
+        const otp = generateOtp()
+        const otpExpiry = new Date(Date.now() + 10 * 60 * 1000)
+
+        await userModel.findByIdAndUpdate(user._id, {
+            otp,
+            otpExpiry,
+            otpAttempts: 0,
+        })
+
+        // Send OTP email
+        await sendEmail({
+            to: email,
+            subject: 'Prescripto — Your New Verification Code',
+            text: `Your new verification code is: ${otp}. It will expire in 10 minutes.`,
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px; background: #f9fafb; border-radius: 12px;">
+                    <h2 style="color: #1a1a2e; margin-bottom: 8px;">New Verification Code</h2>
+                    <p style="color: #555; font-size: 15px;">Here is your new verification code:</p>
+                    <div style="background: #5f6fff; color: #fff; font-size: 32px; font-weight: bold; letter-spacing: 8px; text-align: center; padding: 16px; border-radius: 8px; margin: 24px 0;">
+                        ${otp}
+                    </div>
+                    <p style="color: #888; font-size: 13px;">This code expires in <strong>10 minutes</strong>. If you didn't request this, please ignore this email.</p>
+                </div>
+            `
+        })
+
+        res.json({ success: true, message: 'A new OTP has been sent to your email.' })
 
     } catch (error) {
         console.log(error)
@@ -72,6 +229,11 @@ const loginUser = async (req, res) => {
 
         if (!user) {
             return res.json({ success: false, message: "User does not exist" })
+        }
+
+        // Block unverified users from logging in
+        if (!user.isVerified) {
+            return res.json({ success: false, message: "Please verify your email first. Check your inbox for the OTP." })
         }
 
         const isMatch = await bcrypt.compare(password, user.password)
@@ -358,6 +520,8 @@ const verifyStripe = async (req, res) => {
 export {
     loginUser,
     registerUser,
+    verifyOtp,
+    resendOtp,
     getProfile,
     updateProfile,
     bookAppointment,
