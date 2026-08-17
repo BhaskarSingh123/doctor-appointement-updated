@@ -1,5 +1,7 @@
 import { io } from "socket.io-client"
 
-const socket = io("https://doctor-appointement-updated.onrender.com")
+const socket = io(import.meta.env.VITE_BACKEND_URL, {
+  reconnection: false
+});
 
 export default socket
