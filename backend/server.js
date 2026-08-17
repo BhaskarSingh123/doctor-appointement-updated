@@ -19,10 +19,12 @@ import ragRouter from "./routes/ragRoute.js"
 // app config
 const app = express()
 const server = http.createServer(app)
+const allowedOrigin = "https://doctor-appointement-updated.vercel.app"
 const io = new Server(server, {
   cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
+    origin: allowedOrigin,
+    methods: ["GET", "POST"],
+    credentials: true
   }
 })
 
@@ -35,7 +37,10 @@ connectCloudinary()
 
 // middlewares
 app.use(express.json())
-app.use(cors())
+app.use(cors({
+  origin: allowedOrigin,
+  credentials: true
+}))
 
 io.on("connection", (socket) => {
 
@@ -65,6 +70,6 @@ app.get("/", (req, res) => {
   res.send("API Working")
 })
 
-server.listen(port, () =>
+server.listen(port,"0.0.0.0", () =>
   console.log(`Server started on PORT:${port}`)
 )
