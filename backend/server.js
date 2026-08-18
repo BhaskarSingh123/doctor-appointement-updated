@@ -21,7 +21,9 @@ const app = express()
 const server = http.createServer(app)
 const allowedOrigins = [
   "https://doctor-appointement-updated.vercel.app",
-  "http://localhost:5173"
+  "https://doctor-appointement-updated-t9yb.vercel.app",
+  "http://localhost:5173",
+  "http://localhost:5174"
 ]
 const io = new Server(server, {
   cors: {
