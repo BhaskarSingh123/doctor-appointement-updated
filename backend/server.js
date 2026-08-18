@@ -24,7 +24,43 @@ const allowedOrigins = [
   "https://doctor-appointement-updated-t9yb.vercel.app",
   "http://localhost:5173",
   "http://localhost:5174"
-]
+];
+
+const corsOptions = {
+  origin: function (origin, callback) {
+    console.log("Incoming CORS origin:", origin);
+
+    // Allow requests without an origin
+    // (Postman, server-to-server, etc.)
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    if (allowedOrigins.includes(origin)) {
+      console.log("CORS allowed:", origin);
+      return callback(null, true);
+    }
+
+    console.log("CORS blocked:", origin);
+    return callback(new Error(`CORS blocked for origin: ${origin}`));
+  },
+
+  credentials: true,
+
+  methods: [
+    "GET",
+    "POST",
+    "PUT",
+    "PATCH",
+    "DELETE",
+    "OPTIONS"
+  ],
+
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization"
+  ]
+};
 const io = new Server(server, {
   cors: {
     origin: allowedOrigins,
@@ -42,10 +78,7 @@ connectCloudinary()
 
 // middlewares
 app.use(express.json())
-app.use(cors({
-  origin: allowedOrigins,
-  credentials: true
-}))
+app.use(cors(corsOptions))
 
 io.on("connection", (socket) => {
 
