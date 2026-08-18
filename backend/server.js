@@ -19,10 +19,13 @@ import ragRouter from "./routes/ragRoute.js"
 // app config
 const app = express()
 const server = http.createServer(app)
-const allowedOrigin = "https://doctor-appointement-updated.vercel.app"
+const allowedOrigins = [
+  "https://doctor-appointement-updated.vercel.app",
+  "http://localhost:5173"
+]
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigin,
+    origin: allowedOrigins,
     methods: ["GET", "POST"],
     credentials: true
   }
@@ -38,7 +41,7 @@ connectCloudinary()
 // middlewares
 app.use(express.json())
 app.use(cors({
-  origin: allowedOrigin,
+  origin: allowedOrigins,
   credentials: true
 }))
 

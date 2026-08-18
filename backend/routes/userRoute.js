@@ -1,5 +1,6 @@
 import express from 'express';
 import { loginUser, registerUser, verifyOtp, resendOtp, getProfile, updateProfile, bookAppointment, listAppointment, cancelAppointment, paymentRazorpay, verifyRazorpay, paymentStripe, verifyStripe } from '../controllers/userController.js';
+import { googleLogin } from '../controllers/googleAuthController.js';
 import { getUserNotifications, markUserNotificationsRead } from '../controllers/notificationController.js';
 import upload from '../middleware/multer.js';
 import authUser from '../middleware/authUser.js';
@@ -9,6 +10,7 @@ userRouter.post("/register", registerUser)
 userRouter.post("/verify-otp", verifyOtp)
 userRouter.post("/resend-otp", resendOtp)
 userRouter.post("/login", loginUser)
+userRouter.post("/google-login", googleLogin)
 
 userRouter.get("/get-profile", authUser, getProfile)
 userRouter.post("/update-profile", upload.single('image'), authUser, updateProfile)

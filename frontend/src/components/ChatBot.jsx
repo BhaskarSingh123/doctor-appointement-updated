@@ -90,41 +90,55 @@ const ChatBot = () => {
 
     <div>
 
-      {/* Floating Chat Button */}
-      <button
-
-        onClick={() => setIsOpen(!isOpen)}
-
+      {/* Floating Chat Button with Label */}
+      <div
         style={{
           position: "fixed",
-
           bottom: "20px",
-
           right: "20px",
-
-          width: "65px",
-
-          height: "65px",
-
-          borderRadius: "50%",
-
-          border: "none",
-
-          background: "#2563eb",
-
-          color: "white",
-
-          fontSize: "28px",
-
-          cursor: "pointer",
-
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
           zIndex: 1000,
-
-          boxShadow: "0 6px 20px rgba(0,0,0,0.25)"
         }}
       >
-        💬
-      </button>
+        {/* AI Assistant Label */}
+        {!isOpen && (
+          <div
+            style={{
+              background: "#1e40af",
+              color: "white",
+              padding: "5px 12px",
+              borderRadius: "8px",
+              fontSize: "12px",
+              fontWeight: "600",
+              marginBottom: "8px",
+              whiteSpace: "nowrap",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+              letterSpacing: "0.3px",
+            }}
+          >
+            🤖 AI Assistant
+          </div>
+        )}
+
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          style={{
+            width: "65px",
+            height: "65px",
+            borderRadius: "50%",
+            border: "none",
+            background: "#2563eb",
+            color: "white",
+            fontSize: "28px",
+            cursor: "pointer",
+            boxShadow: "0 6px 20px rgba(0,0,0,0.25)",
+          }}
+        >
+          {isOpen ? "✕" : "💬"}
+        </button>
+      </div>
 
       {/* Chat Window */}
       {

@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState, useRef } from 'react'
+import React, { useContext, useEffect, useState, useRef, useCallback } from 'react'
 import { AppContext } from '../context/AppContext'
 import axios from 'axios'
 import { toast } from 'react-toastify'
@@ -21,6 +21,10 @@ const Login = () => {
   const [resendCooldown, setResendCooldown] = useState(0)
   const inputRefs = useRef([])
 
+  // Google Sign-In
+  const googleButtonRef = useRef(null)
+  const [googleLoading, setGoogleLoading] = useState(false)
+
   const navigate = useNavigate()
   const { backendUrl, token, setToken } = useContext(AppContext)
 
@@ -30,6 +34,90 @@ const Login = () => {
     const timer = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000)
     return () => clearTimeout(timer)
   }, [resendCooldown])
+
+  // Google Sign-In callback
+  const handleGoogleCallback = useCallback(async (response) => {
+    setGoogleLoading(true)
+    try {
+      const { data } = await axios.post(`${backendUrl}/api/user/google-login`, {
+        credential: response.credential,
+      })
+
+      if (data.success) {
+        toast.success('Signed in with Google successfully!')
+        localStorage.setItem('token', data.token)
+        setToken(data.token)
+      } else {
+        toast.error(data.message)
+      }
+    } catch (error) {
+      toast.error('Google Sign-In failed. Please try again.')
+    }
+    setGoogleLoading(false)
+  }, [backendUrl, setToken])
+
+  // Load Google Identity Services script and render button
+  useEffect(() => {
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
+    if (!clientId || clientId === 'YOUR_GOOGLE_CLIENT_ID_HERE') return
+
+    // Check if script is already loaded
+    if (window.google?.accounts?.id) {
+      initializeGoogleSignIn(clientId)
+      return
+    }
+
+    const script = document.createElement('script')
+    script.src = 'https://accounts.google.com/gsi/client'
+    script.async = true
+    script.defer = true
+    script.onload = () => initializeGoogleSignIn(clientId)
+    document.head.appendChild(script)
+
+    return () => {
+      // Cleanup: remove script on unmount if it was added
+      if (script.parentNode) {
+        script.parentNode.removeChild(script)
+      }
+    }
+  }, [handleGoogleCallback])
+
+  const initializeGoogleSignIn = (clientId) => {
+    if (!window.google?.accounts?.id) return
+
+    window.google.accounts.id.initialize({
+      client_id: clientId,
+      callback: handleGoogleCallback,
+    })
+
+    // Render the button if the ref is available
+    if (googleButtonRef.current) {
+      window.google.accounts.id.renderButton(googleButtonRef.current, {
+        theme: 'outline',
+        size: 'large',
+        width: '100%',
+        text: state === 'sign Up' ? 'signup_with' : 'signin_with',
+        shape: 'rectangular',
+        logo_alignment: 'left',
+      })
+    }
+  }
+
+  // Re-render Google button when state (Login/Sign Up) changes
+  useEffect(() => {
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
+    if (!clientId || clientId === 'YOUR_GOOGLE_CLIENT_ID_HERE') return
+    if (window.google?.accounts?.id && googleButtonRef.current) {
+      window.google.accounts.id.renderButton(googleButtonRef.current, {
+        theme: 'outline',
+        size: 'large',
+        width: '100%',
+        text: state === 'sign Up' ? 'signup_with' : 'signin_with',
+        shape: 'rectangular',
+        logo_alignment: 'left',
+      })
+    }
+  }, [state])
 
   const onSubmitHandler = async (event) => {
     event.preventDefault();
@@ -237,6 +325,22 @@ const Login = () => {
       <div className='flex flex-col gap-3 m-auto items-start p-8 min-w-[340px] sm:min-w-96 border rounded-xl text-[#5E5E5E] text-sm shadow-lg'>
         <p className='text-2xl font-semibold'>{state === 'sign Up' ? 'Create Account' : 'Login'}</p>
         <p>Please {state === 'sign Up' ? 'sign up' : 'log in'} to book appointment</p>
+
+        {/* Google Sign-In Button */}
+        <div className='w-full flex flex-col items-center'>
+          <div ref={googleButtonRef} className='w-full flex justify-center'></div>
+          {googleLoading && (
+            <p className='text-xs text-gray-400 mt-1'>Signing in with Google...</p>
+          )}
+        </div>
+
+        {/* Divider */}
+        <div className='flex items-center w-full gap-3 my-1'>
+          <div className='flex-1 h-px bg-gray-300'></div>
+          <span className='text-xs text-gray-400 font-medium'>OR</span>
+          <div className='flex-1 h-px bg-gray-300'></div>
+        </div>
+
         {state === 'sign Up'
           ? <div className='w-full '>
             <p>Full Name</p>

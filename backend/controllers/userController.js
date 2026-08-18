@@ -231,6 +231,11 @@ const loginUser = async (req, res) => {
             return res.json({ success: false, message: "User does not exist" })
         }
 
+        // Block Google-only users from email/password login
+        if (user.authProvider === 'google' && !user.password) {
+            return res.json({ success: false, message: "This account uses Google Sign-In. Please use the 'Sign in with Google' button." })
+        }
+
         // Block unverified users from logging in
         if (!user.isVerified) {
             return res.json({ success: false, message: "Please verify your email first. Check your inbox for the OTP." })
