@@ -59,6 +59,7 @@ const corsOptions = {
   allowedHeaders: [
     "Content-Type",
     "Authorization",
+    "token",
     "atoken",
     "dtoken"
   ]
