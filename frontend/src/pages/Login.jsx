@@ -59,7 +59,7 @@ const Login = () => {
   // Load Google Identity Services script and render button
   useEffect(() => {
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
-    if (!clientId || clientId === 'YOUR_GOOGLE_CLIENT_ID_HERE') return
+    if (!clientId || clientId === '505171249913-1licr6t06r7g07ro6lbopjufg2kagkik.apps.googleusercontent.com') return
 
     // Check if script is already loaded
     if (window.google?.accounts?.id) {
@@ -106,7 +106,7 @@ const Login = () => {
   // Re-render Google button when state (Login/Sign Up) changes
   useEffect(() => {
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
-    if (!clientId || clientId === 'YOUR_GOOGLE_CLIENT_ID_HERE') return
+    if (!clientId || clientId === '505171249913-1licr6t06r7g07ro6lbopjufg2kagkik.apps.googleusercontent.com') return
     if (window.google?.accounts?.id && googleButtonRef.current) {
       window.google.accounts.id.renderButton(googleButtonRef.current, {
         theme: 'outline',
