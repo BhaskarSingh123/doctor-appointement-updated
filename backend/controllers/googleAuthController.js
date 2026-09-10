@@ -4,6 +4,12 @@ import userModel from '../models/userModel.js';
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
+if (!process.env.GOOGLE_CLIENT_ID) {
+    console.warn('⚠️  WARNING: GOOGLE_CLIENT_ID is not set in .env — Google Sign-In will not work!');
+} else {
+    console.log('✅ Google OAuth Client ID loaded successfully');
+}
+
 // API for Google Sign-In
 const googleLogin = async (req, res) => {
     try {
@@ -11,6 +17,11 @@ const googleLogin = async (req, res) => {
 
         if (!credential) {
             return res.json({ success: false, message: 'Google credential is required' });
+        }
+
+        if (!process.env.GOOGLE_CLIENT_ID) {
+            console.error('GOOGLE_CLIENT_ID is not configured in .env');
+            return res.json({ success: false, message: 'Google Sign-In is not configured on the server.' });
         }
 
         // Verify the Google ID token
@@ -81,7 +92,7 @@ const googleLogin = async (req, res) => {
             return res.json({ success: false, message: 'Invalid Google token. Please try again.' });
         }
 
-        res.json({ success: false, message: 'Google authentication failed. Please try again.' });
+        res.json({ success: false, message: error.message });
     }
 };
 

@@ -51,7 +51,9 @@ const Login = () => {
         toast.error(data.message)
       }
     } catch (error) {
-      toast.error('Google Sign-In failed. Please try again.')
+      console.error('Google Sign-In error:', error?.response?.data || error.message || error)
+      const msg = error?.response?.data?.message || 'Google Sign-In failed. Please try again.'
+      toast.error(msg)
     }
     setGoogleLoading(false)
   }, [backendUrl, setToken])
@@ -75,6 +77,10 @@ const Login = () => {
     script.async = true
     script.defer = true
     script.onload = () => initializeGoogleSignIn(clientId)
+    script.onerror = () => {
+      console.error('Failed to load Google Identity Services script')
+      toast.error('Google Sign-In is unavailable. Please check your internet connection.')
+    }
     document.head.appendChild(script)
 
     return () => {
@@ -128,34 +134,39 @@ const Login = () => {
   const onSubmitHandler = async (event) => {
     event.preventDefault();
 
-    if (state === 'sign Up') {
+    try {
+      if (state === 'sign Up') {
 
-      const { data } = await axios.post(`${backendUrl}/api/user/register`, { name, email, password })
+        const { data } = await axios.post(`${backendUrl}/api/user/register`, { name, email, password })
 
-      if (data.success && data.requiresVerification) {
-        // Show OTP verification screen
-        setOtpEmail(data.email)
-        setShowOtp(true)
-        setResendCooldown(60)
-        toast.success('Verification code sent to your email!')
-      } else if (data.success) {
-        localStorage.setItem('token', data.token)
-        setToken(data.token)
+        if (data.success && data.requiresVerification) {
+          // Show OTP verification screen
+          setOtpEmail(data.email)
+          setShowOtp(true)
+          setResendCooldown(60)
+          toast.success('Verification code sent to your email!')
+        } else if (data.success) {
+          localStorage.setItem('token', data.token)
+          setToken(data.token)
+        } else {
+          toast.error(data.message)
+        }
+
       } else {
-        toast.error(data.message)
+
+        const { data } = await axios.post(`${backendUrl}/api/user/login`, { email, password })
+
+        if (data.success) {
+          localStorage.setItem('token', data.token)
+          setToken(data.token)
+        } else {
+          toast.error(data.message)
+        }
+
       }
-
-    } else {
-
-      const { data } = await axios.post(`${backendUrl}/api/user/login`, { email, password })
-
-      if (data.success) {
-        localStorage.setItem('token', data.token)
-        setToken(data.token)
-      } else {
-        toast.error(data.message)
-      }
-
+    } catch (error) {
+      console.error('Auth error:', error)
+      toast.error('Unable to connect to server. Please try again later.')
     }
 
   }
