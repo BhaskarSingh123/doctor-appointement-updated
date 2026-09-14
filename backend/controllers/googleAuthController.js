@@ -7,7 +7,7 @@ const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 if (!process.env.GOOGLE_CLIENT_ID) {
     console.warn('⚠️  WARNING: GOOGLE_CLIENT_ID is not set in .env — Google Sign-In will not work!');
 } else {
-    console.log('✅ Google OAuth Client ID loaded successfully');
+    console.log('✅ Google OAuth Client ID loaded:', process.env.GOOGLE_CLIENT_ID.substring(0, 20) + '...');
 }
 
 // API for Google Sign-In
@@ -16,6 +16,7 @@ const googleLogin = async (req, res) => {
         const { credential } = req.body;
 
         if (!credential) {
+            console.log('Google Auth: No credential in request body');
             return res.json({ success: false, message: 'Google credential is required' });
         }
 
@@ -24,14 +25,23 @@ const googleLogin = async (req, res) => {
             return res.json({ success: false, message: 'Google Sign-In is not configured on the server.' });
         }
 
-        // Verify the Google ID token
-        const ticket = await client.verifyIdToken({
-            idToken: credential,
-            audience: process.env.GOOGLE_CLIENT_ID,
-        });
+        console.log('Google Auth: Verifying token...');
 
-        const payload = ticket.getPayload();
+        // Verify the Google ID token
+        let payload;
+        try {
+            const ticket = await client.verifyIdToken({
+                idToken: credential,
+                audience: process.env.GOOGLE_CLIENT_ID,
+            });
+            payload = ticket.getPayload();
+        } catch (verifyError) {
+            console.error('Google token verification failed:', verifyError.message);
+            return res.json({ success: false, message: 'Google authentication failed. Please try signing in again.' });
+        }
+
         const { sub: googleId, email, name, picture } = payload;
+        console.log('Google Auth: Token verified for email:', email);
 
         if (!email) {
             return res.json({ success: false, message: 'Unable to get email from Google account' });

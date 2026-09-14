@@ -24,6 +24,7 @@ const Login = () => {
   // Google Sign-In
   const googleButtonRef = useRef(null)
   const [googleLoading, setGoogleLoading] = useState(false)
+  const googleInitializedRef = useRef(false)
 
   const navigate = useNavigate()
   const { backendUrl, token, setToken } = useContext(AppContext)
@@ -35,20 +36,33 @@ const Login = () => {
     return () => clearTimeout(timer)
   }, [resendCooldown])
 
-  // Google Sign-In callback
-  const handleGoogleCallback = useCallback(async (response) => {
+  // Google Sign-In callback — stored in a ref so Google always calls the latest version
+  const handleGoogleCallbackRef = useRef(null)
+
+  handleGoogleCallbackRef.current = async (response) => {
+    console.log('Google callback received:', response ? 'credential present' : 'no response')
+
+    if (!response?.credential) {
+      console.error('Google Sign-In: No credential received in callback')
+      toast.error('Google Sign-In failed — no credential received. Please try again.')
+      setGoogleLoading(false)
+      return
+    }
+
     setGoogleLoading(true)
     try {
       const { data } = await axios.post(`${backendUrl}/api/user/google-login`, {
         credential: response.credential,
       })
 
+      console.log('Google login backend response:', data)
+
       if (data.success) {
         toast.success('Signed in with Google successfully!')
         localStorage.setItem('token', data.token)
         setToken(data.token)
       } else {
-        toast.error(data.message)
+        toast.error(data.message || 'Google Sign-In failed on server')
       }
     } catch (error) {
       console.error('Google Sign-In error:', error?.response?.data || error.message || error)
@@ -56,13 +70,49 @@ const Login = () => {
       toast.error(msg)
     }
     setGoogleLoading(false)
-  }, [backendUrl, setToken])
+  }
+
+  // Stable callback wrapper that delegates to the ref
+  const stableGoogleCallback = useCallback((response) => {
+    handleGoogleCallbackRef.current?.(response)
+  }, [])
+
+  // Initialize Google Sign-In
+  const initializeGoogleSignIn = useCallback((clientId) => {
+    if (!window.google?.accounts?.id) return
+
+    window.google.accounts.id.initialize({
+      client_id: clientId,
+      callback: stableGoogleCallback,
+      ux_mode: 'popup',
+      itp_support: true,
+      auto_select: false,
+      cancel_on_tap_outside: false,
+      use_fedcm_for_prompt: false,
+    })
+
+    googleInitializedRef.current = true
+
+    // Render the button if the ref is available
+    if (googleButtonRef.current) {
+      // Clear previous button content
+      googleButtonRef.current.innerHTML = ''
+      window.google.accounts.id.renderButton(googleButtonRef.current, {
+        theme: 'outline',
+        size: 'large',
+        width: '100%',
+        text: state === 'sign Up' ? 'signup_with' : 'signin_with',
+        shape: 'rectangular',
+        logo_alignment: 'left',
+      })
+    }
+  }, [stableGoogleCallback, state])
 
   // Load Google Identity Services script and render button
   useEffect(() => {
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
-    if (!clientId ){
-      console.error('VITE_GOOGLE_CLIENT_ID is missing')
+    if (!clientId) {
+      console.error('VITE_GOOGLE_CLIENT_ID is missing from environment')
       return
     }
 
@@ -76,7 +126,10 @@ const Login = () => {
     script.src = 'https://accounts.google.com/gsi/client'
     script.async = true
     script.defer = true
-    script.onload = () => initializeGoogleSignIn(clientId)
+    script.onload = () => {
+      console.log('Google Identity Services script loaded')
+      initializeGoogleSignIn(clientId)
+    }
     script.onerror = () => {
       console.error('Failed to load Google Identity Services script')
       toast.error('Google Sign-In is unavailable. Please check your internet connection.')
@@ -89,47 +142,18 @@ const Login = () => {
         script.parentNode.removeChild(script)
       }
     }
-  }, [handleGoogleCallback])
-
-  const initializeGoogleSignIn = (clientId) => {
-    if (!window.google?.accounts?.id) return
-
-    window.google.accounts.id.initialize({
-      client_id: clientId,
-      callback: handleGoogleCallback,
-    })
-
-    // Render the button if the ref is available
-    if (googleButtonRef.current) {
-      window.google.accounts.id.renderButton(googleButtonRef.current, {
-        theme: 'outline',
-        size: 'large',
-        width: '100%',
-        text: state === 'sign Up' ? 'signup_with' : 'signin_with',
-        shape: 'rectangular',
-        logo_alignment: 'left',
-      })
-    }
-  }
+  }, [initializeGoogleSignIn])
 
   // Re-render Google button when state (Login/Sign Up) changes
   useEffect(() => {
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
-    if (!clientId ){
-      console.error('VITE_GOOGLE_CLIENT_ID is missing')
-      return
-    }
+    if (!clientId) return
+
     if (window.google?.accounts?.id && googleButtonRef.current) {
-      window.google.accounts.id.renderButton(googleButtonRef.current, {
-        theme: 'outline',
-        size: 'large',
-        width: '100%',
-        text: state === 'sign Up' ? 'signup_with' : 'signin_with',
-        shape: 'rectangular',
-        logo_alignment: 'left',
-      })
+      // Re-initialize with updated state for button text
+      initializeGoogleSignIn(clientId)
     }
-  }, [state])
+  }, [state, initializeGoogleSignIn])
 
   const onSubmitHandler = async (event) => {
     event.preventDefault();
